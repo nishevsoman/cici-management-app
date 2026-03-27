@@ -1,18 +1,22 @@
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html>
-      <body>
-        <nav className="p-4 border-b">
-          <a href="/dashboard" className="mr-4">Dashboard</a>
-          <a href="/batches">Batches</a>
-          <a href="/students" className="mr-4">Students</a>
-        </nav>
+import type { Metadata } from "next";
+import "./globals.css";
+import { AuthProvider } from "@/lib/authContext";
+import { ToastProvider } from "@/lib/toast";
 
-        {children}
+export const metadata: Metadata = {
+  title: "AttendTrack — Coaching Management",
+  description: "Student attendance tracking for coaching institutes",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );
