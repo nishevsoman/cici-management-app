@@ -32,6 +32,7 @@ export default function AttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState<string | null>(null);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [sendingSMS, setSendingSMS] = useState(false);
 
   useEffect(() => {
     const loadBatches = async () => {
@@ -90,7 +91,7 @@ export default function AttendancePage() {
         .eq("batch_id", selectedBatch)
         .eq("date", date);
 
-      setAttendanceMap(prev => {
+      setAttendanceMap((prev) => {
         const next = { ...prev };
         delete next[studentId];
         return next;
@@ -102,7 +103,7 @@ export default function AttendancePage() {
         .eq("student_id", studentId)
         .eq("batch_id", selectedBatch)
         .eq("date", date);
-      setAttendanceMap(prev => ({ ...prev, [studentId]: status }));
+      setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
     } else {
       const { error } = await supabase.from("attendance").insert({
         student_id: studentId,
@@ -111,23 +112,66 @@ export default function AttendancePage() {
         status,
       });
       if (error) toast(error.message, "error");
-      else setAttendanceMap(prev => ({ ...prev, [studentId]: status }));
+      else setAttendanceMap((prev) => ({ ...prev, [studentId]: status }));
     }
 
     setSaving(null);
   };
 
   const markAll = async (status: "present" | "absent") => {
-    const toMark = students.filter(s => attendanceMap[s.id] !== status);
+    const toMark = students.filter((s) => attendanceMap[s.id] !== status);
     for (const s of toMark) await mark(s.id, status);
     toast(`All students marked as ${status}`, "success");
   };
 
-  const presentCount = students.filter(s => attendanceMap[s.id] === "present").length;
-  const absentCount = students.filter(s => attendanceMap[s.id] === "absent").length;
+  const sendAbsenceSMS = async () => {
+    const absentCount = students.filter(
+      (s) => attendanceMap[s.id] === "absent"
+    ).length;
+
+    if (absentCount === 0) {
+      toast("No absent students to notify.", "error");
+      return;
+    }
+
+    setSendingSMS(true);
+    try {
+      const res = await fetch("/api/send-absence-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: selectedBatch, date }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast(data.error || "Failed to send SMS", "error");
+      } else if (data.sent === 0 && data.skipped > 0) {
+        toast(
+          `No SMS sent — ${data.skipped} student(s) have no phone number.`,
+          "error"
+        );
+      } else {
+        toast(
+          `SMS sent to ${data.sent} student(s)${data.failed > 0 ? `, ${data.failed} failed` : ""}${data.skipped > 0 ? `, ${data.skipped} skipped (no phone)` : ""}.`,
+          "success"
+        );
+      }
+    } catch {
+      toast("Network error while sending SMS.", "error");
+    } finally {
+      setSendingSMS(false);
+    }
+  };
+
+  const presentCount = students.filter(
+    (s) => attendanceMap[s.id] === "present"
+  ).length;
+  const absentCount = students.filter(
+    (s) => attendanceMap[s.id] === "absent"
+  ).length;
   const unmarkedCount = students.length - presentCount - absentCount;
 
-  const selectedBatchObj = batches.find(b => b.id === selectedBatch);
+  const selectedBatchObj = batches.find((b) => b.id === selectedBatch);
 
   return (
     <AuthGuard>
@@ -142,9 +186,14 @@ export default function AttendancePage() {
           <div className="form-row">
             <div className="form-field">
               <label>Batch</label>
-              <select value={selectedBatch} onChange={e => setSelectedBatch(e.target.value)}>
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
+              <select
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+              >
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -155,15 +204,21 @@ export default function AttendancePage() {
                 type="date"
                 value={date}
                 max={new Date().toISOString().split("T")[0]}
-                onChange={e => setDate(e.target.value)}
+                onChange={(e) => setDate(e.target.value)}
               />
             </div>
 
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-              <button className="btn btn-success btn-sm" onClick={() => markAll("present")}>
+              <button
+                className="btn btn-success btn-sm"
+                onClick={() => markAll("present")}
+              >
                 ✓ All Present
               </button>
-              <button className="btn btn-danger btn-sm" onClick={() => markAll("absent")}>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => markAll("absent")}
+              >
                 ✕ All Absent
               </button>
             </div>
@@ -172,14 +227,43 @@ export default function AttendancePage() {
 
         {/* Stats bar */}
         {students.length > 0 && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              marginBottom: 16,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
             <span className="badge badge-green">✓ Present: {presentCount}</span>
             <span className="badge badge-red">✕ Absent: {absentCount}</span>
             <span className="badge badge-gray">? Unmarked: {unmarkedCount}</span>
             {selectedBatchObj && (
               <span className="badge badge-blue">
-                {selectedBatchObj.name} • {selectedBatchObj.profiles?.name || selectedBatchObj.profiles?.email || "No teacher"}
+                {selectedBatchObj.name} •{" "}
+                {selectedBatchObj.profiles?.name ||
+                  selectedBatchObj.profiles?.email ||
+                  "No teacher"}
               </span>
+            )}
+
+            {/* SMS button — shown when there are absent students */}
+            {absentCount > 0 && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={sendAbsenceSMS}
+                disabled={sendingSMS}
+                style={{ marginLeft: "auto" }}
+              >
+                {sendingSMS ? (
+                  <>
+                    <span className="spinner" /> Sending SMS…
+                  </>
+                ) : (
+                  <>📲 Send Absence SMS ({absentCount})</>
+                )}
+              </button>
             )}
           </div>
         )}
@@ -188,7 +272,9 @@ export default function AttendancePage() {
         <div className="card">
           <div className="card-header">
             <div className="card-title">
-              {loadingStudents ? "Loading…" : `${students.length} student${students.length !== 1 ? "s" : ""}`}
+              {loadingStudents
+                ? "Loading…"
+                : `${students.length} student${students.length !== 1 ? "s" : ""}`}
             </div>
           </div>
 
@@ -203,18 +289,52 @@ export default function AttendancePage() {
             </div>
           ) : (
             <div style={{ padding: "12px" }} className="attendance-grid">
-              {students.map(s => {
+              {students.map((s) => {
                 const status = attendanceMap[s.id];
                 const isSaving = saving === s.id;
 
                 return (
                   <div key={s.id} className="attendance-row">
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "var(--text-2)", flexShrink: 0 }}>
-                      {s.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)}
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        background: "var(--bg-2)",
+                        border: "1px solid var(--border)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        color: "var(--text-2)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {s.name
+                        .split(" ")
+                        .map((w) => w[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
                     </div>
                     <div className="attendance-name">
                       <div style={{ fontWeight: 500 }}>{s.name}</div>
-                      {s.phone && <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>{s.phone}</div>}
+                      {s.phone ? (
+                        <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>
+                          {s.phone}
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: "var(--amber)",
+                            opacity: 0.8,
+                          }}
+                        >
+                          No phone — SMS will be skipped
+                        </div>
+                      )}
                     </div>
 
                     {isSaving ? (

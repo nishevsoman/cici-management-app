@@ -259,6 +259,15 @@ export default function StudentsPage() {
                 />
               </div>
               <div className="form-field">
+                <label>Fees</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+              <div className="form-field">
                 <label>Enroll in Batches</label>
                 <div style={{
                   display: "flex", flexDirection: "column", gap: 6,
