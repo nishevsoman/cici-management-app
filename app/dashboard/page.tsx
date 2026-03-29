@@ -43,15 +43,15 @@ export default function DashboardPage() {
 
       if (isAdmin) {
         promises.push(
-          supabase.from("students").select("id", { count: "exact", head: true }),
-          supabase.from("batches").select("id", { count: "exact", head: true }),
-          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "teacher"),
-          supabase.from("attendance").select("status").eq("date", today),
+          supabase.from("students").select("id", { count: "exact", head: true }).then(r => r),
+          supabase.from("batches").select("id", { count: "exact", head: true }).then(r => r),
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "teacher").then(r => r),
+          supabase.from("attendance").select("status").eq("date", today).then(r => r),
         );
       } else {
         promises.push(
-          supabase.from("batches").select("id", { count: "exact", head: true }),
-          supabase.from("attendance").select("status").eq("date", today),
+          supabase.from("batches").select("id", { count: "exact", head: true }).then(r => r),
+          supabase.from("attendance").select("status").eq("date", today).then(r => r),
         );
       }
 
