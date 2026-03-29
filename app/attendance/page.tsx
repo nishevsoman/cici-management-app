@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/authContext";
 import AuthGuard from "@/components/AuthGuard";
 import { useToast } from "@/lib/toast";
+import { useRouter } from "next/navigation";
 
 interface Batch {
   id: string;
@@ -24,6 +25,7 @@ type AttendanceMap = Record<string, "present" | "absent">;
 export default function AttendancePage() {
   const { isAdmin } = useAuth();
   const toast = useToast();
+  const router = useRouter();
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>("");
@@ -32,7 +34,6 @@ export default function AttendancePage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState<string | null>(null);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [sendingSMS, setSendingSMS] = useState(false);
 
   useEffect(() => {
     const loadBatches = async () => {
@@ -83,7 +84,6 @@ export default function AttendancePage() {
     const existing = attendanceMap[studentId];
 
     if (status === attendanceMap[studentId]) {
-      // Toggle off — delete
       await supabase
         .from("attendance")
         .delete()
@@ -124,51 +124,8 @@ export default function AttendancePage() {
     toast(`All students marked as ${status}`, "success");
   };
 
-  const sendAbsenceSMS = async () => {
-    const absentCount = students.filter(
-      (s) => attendanceMap[s.id] === "absent"
-    ).length;
-
-    if (absentCount === 0) {
-      toast("No absent students to notify.", "error");
-      return;
-    }
-
-    setSendingSMS(true);
-    try {
-      const res = await fetch("/api/send-absence-sms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatch, date }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast(data.error || "Failed to send SMS", "error");
-      } else if (data.sent === 0 && data.skipped > 0) {
-        toast(
-          `No SMS sent — ${data.skipped} student(s) have no phone number.`,
-          "error"
-        );
-      } else {
-        toast(
-          `SMS sent to ${data.sent} student(s)${data.failed > 0 ? `, ${data.failed} failed` : ""}${data.skipped > 0 ? `, ${data.skipped} skipped (no phone)` : ""}.`,
-          "success"
-        );
-      }
-    } catch {
-      toast("Network error while sending SMS.", "error");
-    } finally {
-      setSendingSMS(false);
-    }
-  };
-
-  const presentCount = students.filter(
-    (s) => attendanceMap[s.id] === "present"
-  ).length;
-  const absentCount = students.filter(
-    (s) => attendanceMap[s.id] === "absent"
-  ).length;
+  const presentCount = students.filter((s) => attendanceMap[s.id] === "present").length;
+  const absentCount = students.filter((s) => attendanceMap[s.id] === "absent").length;
   const unmarkedCount = students.length - presentCount - absentCount;
 
   const selectedBatchObj = batches.find((b) => b.id === selectedBatch);
@@ -221,6 +178,12 @@ export default function AttendancePage() {
               >
                 ✕ All Absent
               </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => router.push("/attendance-history")}
+              >
+                📋 History & Reports
+              </button>
             </div>
           </div>
         </div>
@@ -241,29 +204,11 @@ export default function AttendancePage() {
             <span className="badge badge-gray">? Unmarked: {unmarkedCount}</span>
             {selectedBatchObj && (
               <span className="badge badge-blue">
-                {selectedBatchObj.name} •{" "}
+                {selectedBatchObj.name} ·{" "}
                 {selectedBatchObj.profiles?.name ||
                   selectedBatchObj.profiles?.email ||
                   "No teacher"}
               </span>
-            )}
-
-            {/* SMS button — shown when there are absent students */}
-            {absentCount > 0 && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={sendAbsenceSMS}
-                disabled={sendingSMS}
-                style={{ marginLeft: "auto" }}
-              >
-                {sendingSMS ? (
-                  <>
-                    <span className="spinner" /> Sending SMS…
-                  </>
-                ) : (
-                  <>📲 Send Absence SMS ({absentCount})</>
-                )}
-              </button>
             )}
           </div>
         )}
@@ -320,19 +265,9 @@ export default function AttendancePage() {
                     </div>
                     <div className="attendance-name">
                       <div style={{ fontWeight: 500 }}>{s.name}</div>
-                      {s.phone ? (
+                      {s.phone && (
                         <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>
                           {s.phone}
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            fontSize: 11.5,
-                            color: "var(--amber)",
-                            opacity: 0.8,
-                          }}
-                        >
-                          No phone — SMS will be skipped
                         </div>
                       )}
                     </div>

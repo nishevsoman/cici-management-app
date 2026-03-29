@@ -11,11 +11,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: "⬡", label: "Dashboard", href: "/dashboard" },
-  { icon: "✓", label: "Attendance", href: "/attendance" },
-  { icon: "◫", label: "Batches", href: "/batches", adminOnly: true },
-  { icon: "⬟", label: "Students", href: "/students", adminOnly: true },
-  { icon: "◈", label: "Teachers", href: "/teachers", adminOnly: true },
+  { icon: "⬡",  label: "Dashboard",          href: "/dashboard" },
+  { icon: "✓",  label: "Attendance",          href: "/attendance" },
+  { icon: "📋", label: "Attendance History",  href: "/attendance-history" },
+  { icon: "◫",  label: "Batches",             href: "/batches",    adminOnly: true },
+  { icon: "⬟",  label: "Students",            href: "/students",   adminOnly: true },
+  { icon: "◈",  label: "Teachers",            href: "/teachers",   adminOnly: true },
+  { icon: "₹",  label: "Fees",                href: "/fees",       adminOnly: true },
 ];
 
 export default function Sidebar() {
@@ -51,7 +53,7 @@ export default function Sidebar() {
         {filteredItems.map(item => (
           <a
             key={item.href}
-            className={`nav-item ${pathname.startsWith(item.href) ? "active" : ""}`}
+            className={`nav-item ${pathname === item.href || pathname.startsWith(item.href + "/") ? "active" : ""}`}
             href={item.href}
             onClick={e => { e.preventDefault(); router.push(item.href); }}
           >
