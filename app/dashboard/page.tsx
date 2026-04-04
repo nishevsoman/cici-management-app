@@ -39,26 +39,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const load = async () => {
-      const promises: Promise<any>[] = [];
-
       if (isAdmin) {
-        promises.push(
-          supabase.from("students").select("id", { count: "exact", head: true }).then(r => r),
-          supabase.from("batches").select("id", { count: "exact", head: true }).then(r => r),
-          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "teacher").then(r => r),
-          supabase.from("attendance").select("status").eq("date", today).then(r => r),
-        );
-      } else {
-        promises.push(
-          supabase.from("batches").select("id", { count: "exact", head: true }).then(r => r),
-          supabase.from("attendance").select("status").eq("date", today).then(r => r),
-        );
-      }
-
-      const results = await Promise.all(promises);
-
-      if (isAdmin) {
-        const [studentsR, batchesR, teachersR, attendanceR] = results;
+        const [studentsR, batchesR, teachersR, attendanceR] = await Promise.all([
+          supabase.from("students").select("id", { count: "exact", head: true }),
+          supabase.from("batches").select("id", { count: "exact", head: true }),
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "teacher"),
+          supabase.from("attendance").select("status").eq("date", today),
+        ]);
         const att = attendanceR.data || [];
         setStats({
           totalStudents: studentsR.count || 0,
@@ -69,7 +56,10 @@ export default function DashboardPage() {
           todayTotal: att.length,
         });
       } else {
-        const [batchesR, attendanceR] = results;
+        const [batchesR, attendanceR] = await Promise.all([
+          supabase.from("batches").select("id", { count: "exact", head: true }),
+          supabase.from("attendance").select("status").eq("date", today),
+        ]);
         const att = attendanceR.data || [];
         setStats({
           totalStudents: 0,
